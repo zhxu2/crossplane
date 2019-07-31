@@ -33,11 +33,20 @@ import (
 
 var _ reconcile.Reconciler = &DefaultClassReconciler{}
 
+type MockObjectConvertor struct {
+	runtime.ObjectConvertor
+}
+
+func (m *MockObjectConvertor) Convert(in, out, context interface{}) error {
+	return nil
+}
+
 func TestDefaultClassReconcile(t *testing.T) {
 	type args struct {
 		m  manager.Manager
 		of ClaimKind
 		by PolicyKind
+		o  []DefaultClassReconcilerOption
 	}
 
 	type want struct {
@@ -54,8 +63,8 @@ func TestDefaultClassReconcile(t *testing.T) {
 	}
 	policy := MockPolicy{}
 	policy.SetDefaultClassReference(defClassRef)
-	// convPolicy, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&policy)
-	// unPolicy := unstructured.Unstructured{Object: convPolicy}
+	convPolicy, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(&policy)
+	unPolicy := unstructured.Unstructured{Object: convPolicy}
 
 	cases := map[string]struct {
 		args args
@@ -183,53 +192,56 @@ func TestDefaultClassReconcile(t *testing.T) {
 			},
 			want: want{result: reconcile.Result{RequeueAfter: defaultClassWait}},
 		},
-		// "Successful": {
-		// 	args: args{
-		// 		m: &MockManager{
-		// 			c: &test.MockClient{
-		// 				MockGet: test.NewMockGetFn(nil, func(o runtime.Object) error {
-		// 					switch o := o.(type) {
-		// 					case *MockClaim:
-		// 						*o = MockClaim{}
-		// 						return nil
-		// 					default:
-		// 						return errUnexpected
-		// 					}
-		// 				}),
-		// 				MockList: test.NewMockListFn(nil, func(o runtime.Object) error {
-		// 					switch o := o.(type) {
-		// 					case *unstructured.UnstructuredList:
-		// 						cm := &unstructured.UnstructuredList{}
-		// 						cm.Items = []unstructured.Unstructured{
-		// 							unPolicy,
-		// 						}
-		// 						*o = *cm
-		// 						return nil
-		// 					default:
-		// 						return errUnexpected
-		// 					}
-		// 				}),
-		// 				MockUpdate: test.NewMockUpdateFn(nil, func(got runtime.Object) error {
-		// 					want := &MockClaim{}
-		// 					want.SetClassReference(policy.GetDefaultClassReference())
-		// 					if diff := cmp.Diff(want, got, test.EquateConditions()); diff != "" {
-		// 						t.Errorf("-want, +got:\n%s", diff)
-		// 					}
-		// 					return nil
-		// 				}),
-		// 			},
-		// 			s: MockSchemeWith(&MockClaim{}, &MockPolicy{}, &MockPolicyList{}),
-		// 		},
-		// 		of: ClaimKind(MockGVK(&MockClaim{})),
-		// 		by: PolicyKind{Singular: MockGVK(&MockPolicy{}), Plural: MockGVK(&MockPolicyList{})},
-		// 	},
-		// 	want: want{result: reconcile.Result{Requeue: false}},
-		// },
+		"Successful": {
+			args: args{
+				m: &MockManager{
+					c: &test.MockClient{
+						MockGet: test.NewMockGetFn(nil, func(o runtime.Object) error {
+							switch o := o.(type) {
+							case *MockClaim:
+								*o = MockClaim{}
+								return nil
+							default:
+								return errUnexpected
+							}
+						}),
+						MockList: test.NewMockListFn(nil, func(o runtime.Object) error {
+							switch o := o.(type) {
+							case *unstructured.UnstructuredList:
+								cm := &unstructured.UnstructuredList{}
+								cm.Items = []unstructured.Unstructured{
+									unPolicy,
+								}
+								*o = *cm
+								return nil
+							default:
+								return errUnexpected
+							}
+						}),
+						MockUpdate: test.NewMockUpdateFn(nil, func(got runtime.Object) error {
+							want := &MockClaim{}
+							want.SetClassReference(policy.GetDefaultClassReference())
+							if diff := cmp.Diff(want, got, test.EquateConditions()); diff != "" {
+								t.Errorf("-want, +got:\n%s", diff)
+							}
+							return nil
+						}),
+					},
+					s: MockSchemeWith(&MockClaim{}, &MockPolicy{}, &MockPolicyList{}),
+				},
+				of: ClaimKind(MockGVK(&MockClaim{})),
+				by: PolicyKind{Singular: MockGVK(&MockPolicy{}), Plural: MockGVK(&MockPolicyList{})},
+				o: []DefaultClassReconcilerOption{
+					WithObjectConverter(&MockObjectConvertor{}),
+				},
+			},
+			want: want{result: reconcile.Result{Requeue: false}},
+		},
 	}
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			r := NewDefaultClassReconciler(tc.args.m, tc.args.of, tc.args.by)
+			r := NewDefaultClassReconciler(tc.args.m, tc.args.of, tc.args.by, tc.args.o...)
 			got, err := r.Reconcile(reconcile.Request{})
 
 			if diff := cmp.Diff(tc.want.err, err, test.EquateErrors()); diff != "" {

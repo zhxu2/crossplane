@@ -65,8 +65,19 @@ type DefaultClassReconciler struct {
 	newPolicy      func() Policy
 }
 
+// A DefaultClassReconcilerOption configures a DefaultClassReconciler.
+type DefaultClassReconcilerOption func(*DefaultClassReconciler)
+
+// WithObjectConverter specifies how the DefaultClassReconciler should convert
+// an *UnstructuredList into a concrete list type.
+func WithObjectConverter(oc runtime.ObjectConvertor) DefaultClassReconcilerOption {
+	return func(r *DefaultClassReconciler) {
+		r.converter = oc
+	}
+}
+
 // NewDefaultClassReconciler creates a new DefaultReconciler for the claim kind.
-func NewDefaultClassReconciler(m manager.Manager, of ClaimKind, by PolicyKind) *DefaultClassReconciler {
+func NewDefaultClassReconciler(m manager.Manager, of ClaimKind, by PolicyKind, o ...DefaultClassReconcilerOption) *DefaultClassReconciler {
 	nc := func() Claim { return MustCreateObject(schema.GroupVersionKind(of), m.GetScheme()).(Claim) }
 	np := func() Policy { return MustCreateObject(by.Singular, m.GetScheme()).(Policy) }
 	npl := func() PolicyList { return MustCreateObject(by.Plural, m.GetScheme()).(PolicyList) }
@@ -75,7 +86,7 @@ func NewDefaultClassReconciler(m manager.Manager, of ClaimKind, by PolicyKind) *
 	// not been registered with our controller manager's scheme.
 	_, _, _ = nc(), np(), npl()
 
-	return &DefaultClassReconciler{
+	r := &DefaultClassReconciler{
 		client:         m.GetClient(),
 		converter:      m.GetScheme(),
 		policyKind:     by.Singular,
@@ -83,6 +94,12 @@ func NewDefaultClassReconciler(m manager.Manager, of ClaimKind, by PolicyKind) *
 		newClaim:       nc,
 		newPolicy:      np,
 	}
+
+	for _, ro := range o {
+		ro(r)
+	}
+
+	return r
 }
 
 // Reconcile reconciles a claim to the default class reference for its kind.
