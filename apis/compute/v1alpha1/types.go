@@ -24,17 +24,19 @@ import (
 	"github.com/crossplaneio/crossplane-runtime/pkg/resource"
 )
 
-// KubernetesClusterSpec specifies the configuration of a Kubernetes cluster.
+// KubernetesClusterSpec specifies the desired state of a KubernetesCluster.
 type KubernetesClusterSpec struct {
 	runtimev1alpha1.ResourceClaimSpec `json:",inline"`
 
-	// cluster properties
+	// ClusterVersion specifies the desired Kubernetes version, e.g. 1.15.
 	ClusterVersion string `json:"clusterVersion,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// KubernetesCluster is the Schema for the instances API
+// A KubernetesCluster is a portable resource claim that may be satisfied by
+// binding to a Kubernetes cluster managed resource such as an AWS EKS cluster
+// or an Azure AKS cluster.
 // +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.bindingPhase"
 // +kubebuilder:printcolumn:name="CLUSTER-CLASS",type="string",JSONPath=".spec.classRef.name"
 // +kubebuilder:printcolumn:name="CLUSTER-REF",type="string",JSONPath=".spec.resourceName.name"
@@ -95,7 +97,7 @@ func (kc *KubernetesCluster) GetWriteConnectionSecretToReference() corev1.LocalO
 
 // +kubebuilder:object:root=true
 
-// KubernetesClusterList contains a list of KubernetesClusters.
+// KubernetesClusterList contains a list of KubernetesCluster.
 type KubernetesClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -130,7 +132,7 @@ var _ resource.PolicyList = &KubernetesClusterPolicyList{}
 
 // +kubebuilder:object:root=true
 
-// KubernetesClusterPolicyList contains a list of KubernetesClusterPolicy
+// KubernetesClusterPolicyList contains a list of KubernetesClusterPolicy.
 type KubernetesClusterPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

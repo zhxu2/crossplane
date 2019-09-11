@@ -250,7 +250,8 @@ spec:
             iamUsername:
               type: string
             lastLocalPermission:
-              description: LocalPermissionType - Base type for LocalPermissions
+              description: A LocalPermissionType is a type of permission that may
+                be granted to a Bucket.
               type: string
             lastUserPolicyVersion:
               type: integer
