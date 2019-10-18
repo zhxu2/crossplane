@@ -2,6 +2,9 @@ module github.com/crossplaneio/crossplane
 
 go 1.12
 
+// TODO(negz: DO NOT MERGE.
+replace github.com/crossplaneio/crossplane-runtime => github.com/negz/crossplane-runtime v0.0.0-20191023001321-a81fb19350e0
+
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4 // indirect
