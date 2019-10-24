@@ -20,5 +20,4 @@ spec:
     }
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

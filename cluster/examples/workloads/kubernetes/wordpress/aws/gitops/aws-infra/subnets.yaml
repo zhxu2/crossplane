@@ -7,11 +7,10 @@ spec:
   cidrBlock: 192.168.64.0/18
   vpcIdRef:
     name: my-vpc
-  availabilityZone: us-west-2a
+  availabilityZone: us-east-1a
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example
 ---
 apiVersion: network.aws.crossplane.io/v1alpha2
 kind: Subnet
@@ -21,11 +20,10 @@ spec:
   cidrBlock: 192.168.128.0/18
   vpcIdRef:
     name: my-vpc
-  availabilityZone: us-west-2b
+  availabilityZone: us-east-1b
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example
 ---
 apiVersion: network.aws.crossplane.io/v1alpha2
 kind: Subnet
@@ -35,8 +33,7 @@ spec:
   cidrBlock: 192.168.192.0/18
   vpcIdRef:
     name: my-vpc
-  availabilityZone: us-west-2c
+  availabilityZone: us-east-1c
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

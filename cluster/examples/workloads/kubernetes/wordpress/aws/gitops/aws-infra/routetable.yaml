@@ -18,5 +18,4 @@ spec:
         name: my-subnet3
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

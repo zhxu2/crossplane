@@ -16,5 +16,4 @@ spec:
         - cidrIp: 0.0.0.0/0
           description: all ips
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

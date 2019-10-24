@@ -9,5 +9,4 @@ spec:
   enableDnsHostNames: true
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

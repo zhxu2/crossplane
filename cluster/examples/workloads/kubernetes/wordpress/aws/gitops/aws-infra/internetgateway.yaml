@@ -7,5 +7,4 @@ spec:
     name: my-vpc
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

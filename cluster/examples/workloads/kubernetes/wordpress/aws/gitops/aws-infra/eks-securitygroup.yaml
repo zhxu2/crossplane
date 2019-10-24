@@ -9,5 +9,4 @@ spec:
   description: Cluster communication with worker nodes
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example

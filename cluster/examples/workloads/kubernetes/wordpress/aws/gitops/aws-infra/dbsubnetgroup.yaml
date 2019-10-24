@@ -14,5 +14,4 @@ spec:
       value: my-dbsubnetgroup
   reclaimPolicy: Delete
   providerRef:
-    name: aws-provider
-    namespace: crossplane-system
+    name: example
