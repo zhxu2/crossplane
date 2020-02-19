@@ -45,6 +45,7 @@ type WorkloadDefinitionSpec struct {
 // is used to validate the schema of the workload when it is embedded in an OAM
 // Component.
 // +kubebuilder:printcolumn:JSONPath=".spec.definitionRef.name",name=DEFINITION-NAME,type=string
+// +kubebuilder:resource:scope=Cluster
 type WorkloadDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -81,6 +82,7 @@ type TraitDefinitionSpec struct {
 // to validate the schema of the trait when it is embedded in an OAM
 // ApplicationConfiguration.
 // +kubebuilder:printcolumn:JSONPath=".spec.definitionRef.name",name=DEFINITION-NAME,type=string
+// +kubebuilder:resource:scope=Cluster
 type TraitDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -114,6 +116,7 @@ type ScopeDefinitionSpec struct {
 // to validate the schema of the scope when it is embedded in an OAM
 // ApplicationConfiguration.
 // +kubebuilder:printcolumn:JSONPath=".spec.definitionRef.name",name=DEFINITION-NAME,type=string
+// +kubebuilder:resource:scope=Cluster
 type ScopeDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -280,8 +283,7 @@ type WorkloadReference struct {
 	Name string `json:"name"`
 
 	// UID of the referenced workload.
-	// +optional
-	UID *types.UID `json:"uid,omitempty"`
+	UID types.UID `json:"uid"`
 }
 
 // A TraitReference refers to an OAM workload trait.
@@ -296,52 +298,28 @@ type TraitReference struct {
 	Name string `json:"name"`
 
 	// UID of the referenced workload.
-	// +optional
-	UID *types.UID `json:"uid,omitempty"`
+	UID types.UID `json:"uid"`
 }
 
 // A TraitStatus represents the state of a trait.
 type TraitStatus string
 
-// Trait statuses.
-const (
-	TraitStatusUnknown = "Unknown"
-	TraitStatusError   = "Error"
-	TraitStatusCreated = "Created"
-)
-
 // A WorkloadTrait represents a trait associated with a workload.
 type WorkloadTrait struct {
 	// Reference to a trait created by an ApplicationConfiguration.
 	Reference TraitReference `json:"traitRef"`
-
-	// Status of this trait.
-	// +kubebuilder:validation:Enum=Unknown;Error;Created
-	Status TraitStatus `json:"status,omitempty"`
 }
 
-// A WorkloadStatus represents the current state of a workload.
-type WorkloadStatus string
+// A WorkloadStatus represents the status of a workload.
+type WorkloadStatus struct {
+	// ComponentName that produced this workload.
+	ComponentName string `json:"componentName,omitempty"`
 
-// Workload statuses.
-const (
-	WorkloadStatusUnknown = "Unknown"
-	WorkloadStatusError   = "Error"
-	WorkloadStatusCreated = "Created"
-)
-
-// An ApplicationConfigurationWorkload represents a workload associated with an
-// ApplicationConfiguration.
-type ApplicationConfigurationWorkload struct {
 	// Reference to a workload created by an ApplicationConfiguration.
 	Reference WorkloadReference `json:"workloadRef,omitempty"`
 
 	// Traits associated with this workload.
 	Traits []WorkloadTrait `json:"traits,omitempty"`
-
-	// Status of this workload.
-	// +kubebuilder:validation:Enum=Unknown;Error;Created
-	Status WorkloadStatus `json:"status,omitempty"`
 }
 
 // An ApplicationConfigurationStatus represents the observed state of a
@@ -350,12 +328,13 @@ type ApplicationConfigurationStatus struct {
 	runtimev1alpha1.ConditionedStatus `json:",inline"`
 
 	// Workloads created by this ApplicationConfiguration.
-	Workloads []ApplicationConfigurationWorkload `json:"workloads,omitempty"`
+	Workloads []WorkloadStatus `json:"workloads,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
 // An ApplicationConfiguration represents an OAM application.
+// +kubebuilder:resource:shortName=appconfig
 // +kubebuilder:subresource:status
 type ApplicationConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`

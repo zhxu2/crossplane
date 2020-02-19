@@ -18,7 +18,7 @@ spec:
     listKind: TraitDefinitionList
     plural: traitdefinitions
     singular: traitdefinition
-  scope: Namespaced
+  scope: Cluster
   subresources: {}
   validation:
     openAPIV3Schema:

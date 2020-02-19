@@ -13,6 +13,8 @@ spec:
     kind: ApplicationConfiguration
     listKind: ApplicationConfigurationList
     plural: applicationconfigurations
+    shortNames:
+    - appconfig
     singular: applicationconfiguration
   scope: Namespaced
   subresources:
@@ -165,15 +167,10 @@ spec:
             workloads:
               description: Workloads created by this ApplicationConfiguration.
               items:
-                description: An ApplicationConfigurationWorkload represents a workload
-                  associated with an ApplicationConfiguration.
+                description: A WorkloadStatus represents the status of a workload.
                 properties:
-                  status:
-                    description: Status of this workload.
-                    enum:
-                    - Unknown
-                    - Error
-                    - Created
+                  componentName:
+                    description: ComponentName that produced this workload.
                     type: string
                   traits:
                     description: Traits associated with this workload.
@@ -181,13 +178,6 @@ spec:
                       description: A WorkloadTrait represents a trait associated with
                         a workload.
                       properties:
-                        status:
-                          description: Status of this trait.
-                          enum:
-                          - Unknown
-                          - Error
-                          - Created
-                          type: string
                         traitRef:
                           description: Reference to a trait created by an ApplicationConfiguration.
                           properties:
@@ -207,6 +197,7 @@ spec:
                           - apiVersion
                           - kind
                           - name
+                          - uid
                           type: object
                       required:
                       - traitRef
@@ -231,6 +222,7 @@ spec:
                     - apiVersion
                     - kind
                     - name
+                    - uid
                     type: object
                 type: object
               type: array

@@ -18,7 +18,7 @@ spec:
     listKind: ScopeDefinitionList
     plural: scopedefinitions
     singular: scopedefinition
-  scope: Namespaced
+  scope: Cluster
   subresources: {}
   validation:
     openAPIV3Schema:
