@@ -30,6 +30,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane/apis"
+	"github.com/crossplane/crossplane/pkg/controller/oam"
 	"github.com/crossplane/crossplane/pkg/controller/stacks"
 	"github.com/crossplane/crossplane/pkg/controller/stacks/templates"
 	"github.com/crossplane/crossplane/pkg/controller/workload"
@@ -99,11 +100,12 @@ func main() {
 		kingpin.FatalIfError(err, "Cannot create manager")
 
 		kingpin.FatalIfError(apis.AddToScheme(mgr.GetScheme()), "Cannot add core Crossplane APIs to scheme")
+		kingpin.FatalIfError(oam.Setup(mgr, log), "Cannot setup OAM controllers")
 		kingpin.FatalIfError(workload.Setup(mgr, log), "Cannot setup workload controllers")
 		kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
 
 	case extManageCmd.FullCommand():
-		log := logging.NewLogrLogger(zl.WithName("stack-manager"))
+		log := logging.NewLogrLogger(zl.WithName(stack.LabelValueStackManager))
 		log.Debug("Starting", "sync-period", syncPeriod.String())
 
 		cfg, err := getRestConfig(*extManageTenantKubeconfig)
@@ -145,7 +147,7 @@ func main() {
 		// TODO(displague) afero.NewBasePathFs could avoid the need to track Base
 		fs := afero.NewOsFs()
 		rd := &walker.ResourceDir{Base: filepath.Clean(*extUnpackDir), Walker: afero.Afero{Fs: fs}}
-		kingpin.FatalIfError(stack.Unpack(rd, outFile, rd.Base, *extUnpackPermissionScope, *extUnpackTemplatesController), "failed to unpack stacks")
+		kingpin.FatalIfError(stack.Unpack(rd, outFile, rd.Base, *extUnpackPermissionScope, *extUnpackTemplatesController, log), "failed to unpack stacks")
 
 	default:
 		kingpin.FatalUsage("unknown command %s", cmd)

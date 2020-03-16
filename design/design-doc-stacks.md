@@ -7,6 +7,9 @@ This document aims to provide details about the experience and implementation fo
 
 ## Revisions
 
+Stack packages include the version of this document that they follow within
+their primary metadata file, currently the `apiVersion` field of `/.registry/app.yaml`.
+
 * 1.1
   * Renamed Extensions concept to Stacks (`Stack` code references are unaffected) [#571](https://github.com/crossplane/crossplane/issues/571)
   * Added additional Questions and Open Issues
@@ -99,7 +102,7 @@ metadata:
   name: gcp-from-package
 spec:
   source: registry.crossplane.io
-  package: crossplane/stack-gcp:v0.1.0
+  package: crossplane/provider-gcp:v0.1.0
 status:
   conditions:
   - type: Ready
@@ -196,6 +199,73 @@ spec:
             env:
 ```
 
+### Modifying the Stack via StackInstall
+
+The StackInstall spec can include parameters to adjust the composition of the
+Stack resource and behaviors of the StackManager and the Stack's controller.
+
+For example, a private registry can be used as the source of the Stack package
+and the controller.  Both OCI images can be fetched using the necessary
+registry secret and an appropriate pull policy using StackInstall parameters.
+The service account that is created to run the Stack controller can also be
+modified from the StackInstall resource.
+
+```yaml
+apiVersion: stacks.crossplane.io/v1alpha1
+kind: StackInstall
+spec:
+  source: private.registry.example.com
+  package: private-user/image
+  imagePullSecrets:
+  - name: private-registry-secret
+  imagePullPolicy: Always
+  serviceAccount:
+    annotations:
+      iam-service-annotation: "special-value"
+```
+
+The SM, when handling this StackInstall resource, will produce a Stack resource
+that has been modified in the following key ways:
+
+```yaml
+apiVersion: stacks.crossplane.io/v1alpha1
+kind: Stack
+spec:
+  controller:
+    deployment:
+      spec:
+        template:
+          spec:
+            containers:
+            - image: private.registry.example.com/...
+              imagePullPolicy: Always
+            imagePullSecrets:
+            - name: private-registry-secret
+  serviceAccount:
+    annotations:
+      iam-service-annotation: "special-value"
+```
+
+The Stack package and controller image will be prefixed with the `StackInstall`
+`source` if provided. If the controller image already includes a registry, the
+`source` will not be used for the controller image. `StackDefinition` resources
+produced by the SM will also be affected. Their `behavior` images and
+the generic templating-controller will be fetched from the same source.
+
+The `ServiceAccount` created to run the controller deployment will include the
+specified annotations when `serviceAccount.annotations` are provided in the
+`StackInstall`.
+
+The `Deployment` created for the Stack controller will include the
+`StackInstall` specified `imagePullPolicy` and `imagePullSecrets`.
+
+The `initContainer` of the `Job` used by the SM, which copies the stack package
+to a shared volume, will use the `imagePullPolicy` and `imagePullSecrets`
+specified in the `StackInstall` to access the stack image. The SM's package
+processing (`stack unpack`) container used in this `Job` will, however, rely on
+the same `imagePullPolicy` used on the SM responsible for processing the
+`StackInstall`.
+
 ## Stack Package Format
 
 A Stack package is the bundle that contains the custom controller definition, CRDs, icons, and other metadata for a given Stack.
@@ -274,6 +344,14 @@ An example project that processes the artifacts of Kubebuilder 2 to create a Sta
 ### Example `app.yaml`
 
 ```yaml
+# This example conforms to version 0.1.0 of the package format
+apiVersion: 0.1.0
+
+# Version of project (optional)
+# If omitted the version will be filled with the docker tag
+# If set it must match the docker tag
+version: 0.0.1
+
 # Human readable title of application.
 title: Sample Crossplane Stack
 
@@ -284,11 +362,6 @@ overview: |
 # Markdown description of this entry
 readme: |
  *Markdown* describing the sample Crossplane Stack project in more detail
-
-# Version of project (optional)
-# If omitted the version will be filled with the docker tag
-# If set it must match the docker tag
-version: 0.0.1
 
 # Maintainer names and emails.
 maintainers:
@@ -320,6 +393,14 @@ source: "https://github.com/crossplane/sample-stack"
 # License SPDX name: https://spdx.org/licenses/
 license: Apache-2.0
 
+# Type of package represented. Supported values are:
+#
+# - Provider
+# - Stack
+# - Application
+packageType: Provider
+
+
 # Scope of roles needed by the stack once installed in the control plane,
 # current supported values are:
 #
@@ -337,7 +418,18 @@ dependsOn:
 
 ### Example `install.yaml`
 
-The `install.yaml` file is expected to conform to a standard Kubernetes YAML file describing a single `Deployment` object.
+The `install.yaml` file is expected to conform to a standard Kubernetes
+YAML file describing a single `Deployment` object. The only exception is
+that the `image` field in the container spec objects is optional. If it
+is omitted, it will be filled in by the stack manager with the value of
+the image specified in the stack install object used to install the
+stack. Leaving it out makes it easier to manage the versions of images
+if the CRDs and the controller live in the same image.
+
+Additionally, if an image is specified for the `Deployment` object, and
+the stack is installed with an explicit source registry, the registry
+will be injected into the image field if it does not already specify a
+registry.
 
 ```yaml
 apiVersion: apps/v1
@@ -359,7 +451,12 @@ spec:
     spec:
       containers:
       - name: sample-stack-controller
-        image: crossplane/sample-stack:latest
+        # The `image:` field is optional. If omitted, it will be
+        # filled in by the stack manager, using the same image
+        # name and tag as the package on the StackInstall object.
+        # We recommend omitting it unless you know you need it.
+        #
+        # image: crossplane/sample-stack:latest
         env:
         - name: POD_NAME
           valueFrom:

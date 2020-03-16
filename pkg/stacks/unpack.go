@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/ghodss/yaml"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/crossplane/crossplane-runtime/pkg/logging"
 	"github.com/crossplane/crossplane/apis/stacks/v1alpha1"
 	"github.com/crossplane/crossplane/pkg/stacks/walker"
 )
@@ -52,6 +55,11 @@ const (
 	// StackDefinitionNameEnv is an environment variable used in the
 	// StackDefinition controllers deployment to find the StackDefinition
 	StackDefinitionNameEnv = "SD_NAME"
+
+	// StackImageEnv is an environment variable used by the unpack job to select
+	// the stack version if there is no version provided in the application
+	// metadata.
+	StackImageEnv = "STACK_IMAGE"
 
 	// iconFileNamePattern is the pattern used when walking the stack package and looking for icon files.
 	// Icon files that are for a single resource can be prefixed with the kind of the resource, e.g.,
@@ -79,8 +87,11 @@ const (
 	annotationResourceOverview      = "stacks.crossplane.io/resource-overview"
 	annotationResourceOverviewShort = "stacks.crossplane.io/resource-overview-short"
 
-	// Stack CRD Labels
-	labelKubernetesManagedBy = "app.kubernetes.io/managed-by"
+	// LabelKubernetesManagedBy identifies the resource manager
+	LabelKubernetesManagedBy = "app.kubernetes.io/managed-by"
+
+	// LabelValueStackManager is the Crossplane Stack Manager managed-by value
+	LabelValueStackManager = "stack-manager"
 )
 
 var (
@@ -122,6 +133,7 @@ type StackPackager interface {
 
 	GotApp() bool
 	IsNamespaced() bool
+	GetDefaultTmplCtrlImage() string
 
 	AddGroup(string, StackGroup)
 	AddResource(string, StackResource)
@@ -168,8 +180,15 @@ type StackPackage struct {
 	// baseDir is the directory that serves as the base of the stack package (it should be absolute)
 	baseDir string
 
-	// tmplCtrlImage is the Template Controller image to handle template stacks
-	tmplCtrlImage string
+	// defaultTmplCtrlImage is the Template Controller image to handle template stacks
+	defaultTmplCtrlImage string
+
+	log logging.Logger
+}
+
+// GetDefaultTmplCtrlImage returns the default templating controller image path.
+func (sp *StackPackage) GetDefaultTmplCtrlImage() string {
+	return sp.defaultTmplCtrlImage
 }
 
 // Yaml returns a multiple document YAML representation of the Stack Package
@@ -214,6 +233,21 @@ func (sp *StackPackage) IsNamespaced() bool {
 func (sp *StackPackage) SetApp(app v1alpha1.AppMetadataSpec) {
 	app.DeepCopyInto(&sp.Stack.Spec.AppMetadataSpec)
 
+	if sp.Stack.Spec.AppMetadataSpec.Version == "" {
+		iv := os.Getenv(StackImageEnv)
+		sp.log.Debug("No stack version found in app metadata; reading version from environment instead", "versionFromEnvironment", iv)
+
+		ref, err := reference.Parse(iv)
+
+		if err != nil {
+			sp.log.Debug("Unable to parse image reference. Ignoring image reference.", "imageReference", iv, "err", err)
+		} else if tagged, ok := ref.(reference.Tagged); ok {
+			sp.Stack.Spec.AppMetadataSpec.Version = tagged.Tag()
+		} else {
+			sp.log.Debug("No tag found on image reference. Ignoring image reference.", "imageReference", iv)
+		}
+	}
+
 	sp.appSet = true
 }
 
@@ -244,7 +278,7 @@ func (sp *StackPackage) createBehaviorController(sd v1alpha1.Behavior) appsv1.De
 				Containers: []corev1.Container{
 					{
 						Name:  controllerContainerName,
-						Image: sp.tmplCtrlImage,
+						Image: sd.Engine.ControllerImage,
 						// the environment variables are known and applied
 						// to containers at a higher level than unpack
 						Command: []string{"/manager"},
@@ -367,7 +401,7 @@ func (sp *StackPackage) AddCRD(path string, crd *apiextensions.CustomResourceDef
 	if crd.ObjectMeta.Annotations == nil {
 		crd.ObjectMeta.Annotations = map[string]string{}
 	}
-	crd.ObjectMeta.Labels[labelKubernetesManagedBy] = "stack-manager"
+	crd.ObjectMeta.Labels[LabelKubernetesManagedBy] = LabelValueStackManager
 
 	if sp.IsNamespaced() {
 		crd.ObjectMeta.Labels[LabelScope] = NamespaceScoped
@@ -477,7 +511,7 @@ func (sp *StackPackage) applyRules() error {
 }
 
 // NewStackPackage returns a StackPackage with maps created
-func NewStackPackage(baseDir, tmplCtrlImage string) *StackPackage {
+func NewStackPackage(baseDir, tmplCtrlImage string, log logging.Logger) *StackPackage {
 	// create a Stack record and populate it with the relevant package contents
 	sv, sk := v1alpha1.StackGroupVersionKind.ToAPIVersionAndKind()
 	sdv, sdk := v1alpha1.StackDefinitionGroupVersionKind.ToAPIVersionAndKind()
@@ -493,14 +527,15 @@ func NewStackPackage(baseDir, tmplCtrlImage string) *StackPackage {
 			TypeMeta:   metav1.TypeMeta{APIVersion: sdv, Kind: sdk},
 			ObjectMeta: metav1.ObjectMeta{},
 		},
-		CRDs:          map[string]apiextensions.CustomResourceDefinition{},
-		CRDPaths:      map[string]string{},
-		Groups:        map[string]StackGroup{},
-		Icons:         map[string]*v1alpha1.IconSpec{},
-		Resources:     map[string]StackResource{},
-		UISchemas:     map[string]string{},
-		baseDir:       baseDir,
-		tmplCtrlImage: tmplCtrlImage,
+		CRDs:                 map[string]apiextensions.CustomResourceDefinition{},
+		CRDPaths:             map[string]string{},
+		Groups:               map[string]StackGroup{},
+		Icons:                map[string]*v1alpha1.IconSpec{},
+		Resources:            map[string]StackResource{},
+		UISchemas:            map[string]string{},
+		baseDir:              baseDir,
+		defaultTmplCtrlImage: tmplCtrlImage,
+		log:                  log,
 	}
 
 	return sp
@@ -513,8 +548,9 @@ func NewStackPackage(baseDir, tmplCtrlImage string) *StackPackage {
 //
 // baseDir is expected to be an absolute path, i.e. have a root to the path,
 // at the very least "/".
-func Unpack(rw walker.ResourceWalker, out io.StringWriter, baseDir, permissionScope string, tsControllerImage string) error {
-	sp := NewStackPackage(filepath.Clean(baseDir), tsControllerImage)
+func Unpack(rw walker.ResourceWalker, out io.StringWriter, baseDir, permissionScope string, tsControllerImage string, log logging.Logger) error {
+	l := log.WithValues("operation", "unpack")
+	sp := NewStackPackage(filepath.Clean(baseDir), tsControllerImage, l)
 
 	rw.AddStep(appFileName, appStep(sp))
 	rw.AddStep(behaviorFileName, behaviorStep(sp))
